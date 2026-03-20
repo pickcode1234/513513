@@ -1,26 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tower Defense</title>
-  <style>
-    body {
-      text-align: center;
-      background: #222;
-      color: white;
-      font-family: Arial;
-    }
-
-    canvas {
-      background: #111;
-      border: 2px solid white;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Tower Defense</title>
+<style>
+body {
+  text-align: center;
+  background: #222;
+  color: white;
+  font-family: Arial;
+}
+canvas {
+  background: #111;
+  border: 2px solid white;
+}
+</style>
 </head>
 <body>
 
 <h1>Tower Defense</h1>
-<p>Click to place turrets</p>
+<p id="ui"></p>
+<p>1: Basic (50) | 2: Strong (100) | 3: Sniper (150) | W: Wall (30)</p>
 
 <canvas id="gameCanvas" width="600" height="400"></canvas>
 
@@ -31,6 +31,12 @@ const ctx = canvas.getContext("2d");
 let enemies = [];
 let towers = [];
 let bullets = [];
+let walls = [];
+
+let health = 100;
+let points = 150;
+
+let selected = "basic";
 
 class Enemy {
   constructor() {
@@ -42,6 +48,28 @@ class Enemy {
 
   update() {
     this.x += this.speed;
+
+    // wall collision
+    walls.forEach(wall => {
+      if (this.x < wall.x + 20 &&
+          this.x + 20 > wall.x &&
+          this.y < wall.y + 20 &&
+          this.y + 20 > wall.y) {
+
+        this.speed = 0;
+        wall.hp--;
+
+        if (wall.hp <= 0) {
+          walls.splice(walls.indexOf(wall), 1);
+          this.speed = 1;
+        }
+      }
+    });
+
+    if (this.x > canvas.width) {
+      health -= 10;
+      this.dead = true;
+    }
   }
 
   draw() {
@@ -51,11 +79,30 @@ class Enemy {
 }
 
 class Tower {
-  constructor(x, y) {
+  constructor(x, y, type) {
     this.x = x;
     this.y = y;
-    this.range = 120;
-    this.fireRate = 60;
+    this.type = type;
+
+    if (type === "basic") {
+      this.range = 120;
+      this.fireRate = 60;
+      this.damage = 25;
+      this.color = "blue";
+    }
+    if (type === "strong") {
+      this.range = 140;
+      this.fireRate = 80;
+      this.damage = 50;
+      this.color = "green";
+    }
+    if (type === "sniper") {
+      this.range = 200;
+      this.fireRate = 120;
+      this.damage = 100;
+      this.color = "purple";
+    }
+
     this.cooldown = 0;
     this.angle = 0;
     this.target = null;
@@ -88,7 +135,7 @@ class Tower {
       this.angle = Math.atan2(dy, dx);
 
       if (this.cooldown <= 0) {
-        bullets.push(new Bullet(this.x, this.y, this.target));
+        bullets.push(new Bullet(this.x, this.y, this.target, this.damage));
         this.cooldown = this.fireRate;
       }
     }
@@ -97,13 +144,11 @@ class Tower {
   }
 
   draw() {
-    // base
-    ctx.fillStyle = "blue";
+    ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
     ctx.fill();
 
-    // turret barrel
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
@@ -113,12 +158,29 @@ class Tower {
   }
 }
 
+class Wall {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 3;
+  }
+
+  draw() {
+    ctx.fillStyle = "gray";
+    ctx.fillRect(this.x, this.y, 20, 20);
+
+    ctx.fillStyle = "white";
+    ctx.fillText(this.hp, this.x + 6, this.y + 14);
+  }
+}
+
 class Bullet {
-  constructor(x, y, target) {
+  constructor(x, y, target, damage) {
     this.x = x;
     this.y = y;
     this.target = target;
     this.speed = 4;
+    this.damage = damage;
     this.hit = false;
   }
 
@@ -130,8 +192,13 @@ class Bullet {
     let dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 5) {
-      this.target.hp -= 25;
+      this.target.hp -= this.damage;
       this.hit = true;
+
+      if (this.target.hp <= 0) {
+        points += 20;
+      }
+
       return;
     }
 
@@ -147,19 +214,47 @@ class Bullet {
   }
 }
 
+// controls
+document.addEventListener("keydown", (e) => {
+  if (e.key === "1") selected = "basic";
+  if (e.key === "2") selected = "strong";
+  if (e.key === "3") selected = "sniper";
+  if (e.key.toLowerCase() === "w") selected = "wall";
+});
+
 // spawn enemies
 setInterval(() => {
   enemies.push(new Enemy());
 }, 1500);
 
-// place towers
+// place objects
 canvas.addEventListener("click", (e) => {
   const rect = canvas.getBoundingClientRect();
-  towers.push(new Tower(
-    e.clientX - rect.left,
-    e.clientY - rect.top
-  ));
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  let cost = 0;
+
+  if (selected === "basic") cost = 50;
+  if (selected === "strong") cost = 100;
+  if (selected === "sniper") cost = 150;
+  if (selected === "wall") cost = 30;
+
+  if (points < cost) return;
+
+  if (selected === "wall") {
+    walls.push(new Wall(x, y));
+  } else {
+    towers.push(new Tower(x, y, selected));
+  }
+
+  points -= cost;
 });
+
+function updateUI() {
+  document.getElementById("ui").innerText =
+    "Health: " + health + " | Points: " + points + " | Selected: " + selected;
+}
 
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -167,7 +262,7 @@ function gameLoop() {
   enemies.forEach((enemy, i) => {
     enemy.update();
     enemy.draw();
-    if (enemy.hp <= 0) enemies.splice(i, 1);
+    if (enemy.hp <= 0 || enemy.dead) enemies.splice(i, 1);
   });
 
   towers.forEach(tower => {
@@ -175,11 +270,21 @@ function gameLoop() {
     tower.draw();
   });
 
+  walls.forEach(wall => wall.draw());
+
   bullets.forEach((bullet, i) => {
     bullet.update();
     bullet.draw();
     if (bullet.hit) bullets.splice(i, 1);
   });
+
+  updateUI();
+
+  if (health <= 0) {
+    alert("Game Over!");
+    location.reload();
+    return;
+  }
 
   requestAnimationFrame(gameLoop);
 }
