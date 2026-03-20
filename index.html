@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tower Defense</title>
+  <style>
+    body {
+      text-align: center;
+      background: #222;
+      color: white;
+      font-family: Arial;
+    }
+
+    canvas {
+      background: #111;
+      border: 2px solid white;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Tower Defense</h1>
+<p>Click to place turrets</p>
+
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let enemies = [];
+let towers = [];
+let bullets = [];
+
+class Enemy {
+  constructor() {
+    this.x = 0;
+    this.y = 200 + Math.random() * 100 - 50;
+    this.speed = 1;
+    this.hp = 100;
+  }
+
+  update() {
+    this.x += this.speed;
+  }
+
+  draw() {
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.x, this.y, 20, 20);
+  }
+}
+
+class Tower {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.range = 120;
+    this.fireRate = 60;
+    this.cooldown = 0;
+    this.angle = 0;
+    this.target = null;
+  }
+
+  findTarget() {
+    let closest = null;
+    let closestDist = this.range;
+
+    enemies.forEach(enemy => {
+      let dx = enemy.x - this.x;
+      let dy = enemy.y - this.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < closestDist) {
+        closest = enemy;
+        closestDist = dist;
+      }
+    });
+
+    this.target = closest;
+  }
+
+  update() {
+    this.findTarget();
+
+    if (this.target) {
+      let dx = this.target.x - this.x;
+      let dy = this.target.y - this.y;
+      this.angle = Math.atan2(dy, dx);
+
+      if (this.cooldown <= 0) {
+        bullets.push(new Bullet(this.x, this.y, this.target));
+        this.cooldown = this.fireRate;
+      }
+    }
+
+    if (this.cooldown > 0) this.cooldown--;
+  }
+
+  draw() {
+    // base
+    ctx.fillStyle = "blue";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // turret barrel
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, -3, 20, 6);
+    ctx.restore();
+  }
+}
+
+class Bullet {
+  constructor(x, y, target) {
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.speed = 4;
+    this.hit = false;
+  }
+
+  update() {
+    if (!this.target) return;
+
+    let dx = this.target.x - this.x;
+    let dy = this.target.y - this.y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 5) {
+      this.target.hp -= 25;
+      this.hit = true;
+      return;
+    }
+
+    this.x += (dx / dist) * this.speed;
+    this.y += (dy / dist) * this.speed;
+  }
+
+  draw() {
+    ctx.fillStyle = "yellow";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// spawn enemies
+setInterval(() => {
+  enemies.push(new Enemy());
+}, 1500);
+
+// place towers
+canvas.addEventListener("click", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  towers.push(new Tower(
+    e.clientX - rect.left,
+    e.clientY - rect.top
+  ));
+});
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  enemies.forEach((enemy, i) => {
+    enemy.update();
+    enemy.draw();
+    if (enemy.hp <= 0) enemies.splice(i, 1);
+  });
+
+  towers.forEach(tower => {
+    tower.update();
+    tower.draw();
+  });
+
+  bullets.forEach((bullet, i) => {
+    bullet.update();
+    bullet.draw();
+    if (bullet.hit) bullets.splice(i, 1);
+  });
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
